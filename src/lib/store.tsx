@@ -474,27 +474,87 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (user && supabase) {
-      supabase
-        .from("transactions")
-        .insert({
-          id: newId,
-          user_id: user.id,
-          type: newTx.type,
-          amount: newTx.amount,
-          account_id: isValidUUID(newTx.accountId) ? newTx.accountId : (accounts[0]?.id && isValidUUID(accounts[0].id) ? accounts[0].id : null),
-          to_account_id: newTx.toAccountId && isValidUUID(newTx.toAccountId) ? newTx.toAccountId : null,
-          category_id: newTx.categoryId && isValidUUID(newTx.categoryId) ? newTx.categoryId : null,
-          category_name: newTx.categoryName || null,
-          category_icon: newTx.categoryIcon || null,
-          credit_card_id: newTx.creditCardId && isValidUUID(newTx.creditCardId) ? newTx.creditCardId : null,
-          date: newTx.date,
-          note: newTx.note || null,
-          slip_url: newTx.slipUrl || null,
-          tags: newTx.tags || null,
-        })
-        .then(({ error }) => {
-          if (error) console.error("Failed to insert transaction in Supabase:", error);
-        });
+      const payload = {
+        id: newId,
+        user_id: user.id,
+        type: newTx.type,
+        amount: newTx.amount,
+        account_id: isValidUUID(newTx.accountId) ? newTx.accountId : null,
+        to_account_id: newTx.toAccountId && isValidUUID(newTx.toAccountId) ? newTx.toAccountId : null,
+        category_id: newTx.categoryId && isValidUUID(newTx.categoryId) ? newTx.categoryId : null,
+        category_name: newTx.categoryName || null,
+        category_icon: newTx.categoryIcon || null,
+        credit_card_id: newTx.creditCardId && isValidUUID(newTx.creditCardId) ? newTx.creditCardId : null,
+        date: newTx.date,
+        note: newTx.note || null,
+        slip_url: newTx.slipUrl || null,
+        tags: newTx.tags || null,
+      };
+
+      const syncAndInsert = async () => {
+        try {
+          // Auto-upsert linked credit card to DB if missing from foreign table
+          if (payload.credit_card_id) {
+            const cardObj = creditCards.find((c) => c.id === payload.credit_card_id);
+            if (cardObj) {
+              await supabase.from("credit_cards").upsert({
+                id: cardObj.id,
+                user_id: user.id,
+                name: cardObj.name,
+                bank: cardObj.bank,
+                last_four_digits: cardObj.lastFourDigits,
+                credit_limit: cardObj.creditLimit,
+                current_balance: updatedCardBalance !== null ? updatedCardBalance : cardObj.currentBalance,
+                statement_day: cardObj.statementDay,
+                due_day: cardObj.dueDay,
+                card_color: cardObj.cardColor,
+                is_paid_this_month: false,
+              }, { onConflict: "id" });
+            }
+          }
+
+          // Auto-upsert linked account to DB if missing from foreign table
+          if (payload.account_id) {
+            const accObj = accounts.find((a) => a.id === payload.account_id);
+            if (accObj) {
+              await supabase.from("accounts").upsert({
+                id: accObj.id,
+                user_id: user.id,
+                name: accObj.name,
+                type: accObj.type,
+                balance: updatedAccountBalance !== null ? updatedAccountBalance : accObj.balance,
+                currency: accObj.currency || "THB",
+                icon: accObj.icon || null,
+                color: accObj.color || null,
+                account_number: accObj.accountNumber || null,
+                bank_name: accObj.bankName || null,
+              }, { onConflict: "id" });
+            }
+          }
+
+          // Insert transaction into Supabase
+          const { error } = await supabase.from("transactions").insert(payload);
+          if (error) {
+            console.error("Primary transaction insert failed:", error);
+            // Fallback for foreign key or constraint error: retry with sanitized foreign keys
+            if (error.code === "23503" || error.code === "23502") {
+              const fallbackPayload = {
+                ...payload,
+                account_id: null,
+                credit_card_id: null,
+              };
+              const { error: fallbackErr } = await supabase.from("transactions").insert(fallbackPayload);
+              if (fallbackErr) {
+                console.error("Fallback transaction insert also failed:", fallbackErr);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error during transaction sync:", e);
+        }
+      };
+
+      syncAndInsert();
 
       if (updatedAccountBalance !== null && !newTx.creditCardId && isValidUUID(newTx.accountId)) {
         syncAccountBalanceToDb(newTx.accountId, updatedAccountBalance);
