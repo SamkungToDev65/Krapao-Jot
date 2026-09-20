@@ -110,12 +110,16 @@ export function TransactionsView({ onOpenQuickAdd }: TransactionsViewProps) {
     let exCount = 0;
 
     filteredTransactions.forEach((tx) => {
-      if (tx.type === "income") {
-        income += Number(tx.amount || 0);
-        inCount++;
-      } else if (tx.type === "expense") {
-        expense += Number(tx.amount || 0);
-        exCount++;
+      // Exclude credit card swipes from overall cash flow cards unless explicitly filtering by a specific credit card
+      const isCardTx = Boolean(tx.creditCardId);
+      if (!isCardTx || accountFilter !== "all") {
+        if (tx.type === "income") {
+          income += Number(tx.amount || 0);
+          inCount++;
+        } else if (tx.type === "expense") {
+          expense += Number(tx.amount || 0);
+          exCount++;
+        }
       }
     });
 
@@ -126,7 +130,7 @@ export function TransactionsView({ onOpenQuickAdd }: TransactionsViewProps) {
       incomeCount: inCount,
       expenseCount: exCount,
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, accountFilter]);
 
   // Helper to resolve payment source
   const getSourceLabel = (tx: Transaction) => {

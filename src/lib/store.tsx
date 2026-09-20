@@ -345,8 +345,11 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     let totalExpense = 0;
 
     transactions.forEach((tx) => {
-      if (tx.type === "income") totalIncome += Number(tx.amount);
-      if (tx.type === "expense") totalExpense += Number(tx.amount);
+      // Credit card swipes are liabilities, not direct cash outflow from accounts
+      if (!tx.creditCardId) {
+        if (tx.type === "income") totalIncome += Number(tx.amount);
+        if (tx.type === "expense") totalExpense += Number(tx.amount);
+      }
     });
 
     const totalCreditCardDebt = creditCards.reduce(
