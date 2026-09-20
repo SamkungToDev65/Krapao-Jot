@@ -478,7 +478,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           user_id: user.id,
           type: newTx.type,
           amount: newTx.amount,
-          account_id: !newTx.creditCardId && newTx.accountId && isValidUUID(newTx.accountId) ? newTx.accountId : null,
+          account_id: isValidUUID(newTx.accountId) ? newTx.accountId : (accounts[0]?.id && isValidUUID(accounts[0].id) ? accounts[0].id : null),
           to_account_id: newTx.toAccountId && isValidUUID(newTx.toAccountId) ? newTx.toAccountId : null,
           category_id: newTx.categoryId && isValidUUID(newTx.categoryId) ? newTx.categoryId : null,
           category_name: newTx.categoryName || null,

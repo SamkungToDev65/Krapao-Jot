@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
   amount NUMERIC(14, 2) NOT NULL,
-  account_id UUID REFERENCES public.accounts(id) ON DELETE CASCADE NOT NULL,
+  account_id UUID REFERENCES public.accounts(id) ON DELETE CASCADE,
   to_account_id UUID REFERENCES public.accounts(id) ON DELETE SET NULL,
   category_id UUID REFERENCES public.categories(id) ON DELETE SET NULL,
   category_name TEXT,
