@@ -306,8 +306,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         const loadedCards = (dbCards || []).map(mapCreditCardRow);
         const loadedTxs = (dbTxs || []).map(mapTransactionRow);
 
+        // Merge cards from DB with current state so credit cards are never lost if DB is empty
+        const allCardsMap = new Map<string, CreditCard>();
+        creditCards.forEach((c) => allCardsMap.set(c.id, c));
+        loadedCards.forEach((c) => allCardsMap.set(c.id, c));
+        const mergedCards = Array.from(allCardsMap.values());
+
         // Recalculate credit card currentBalance based on transactions for perfect accuracy
-        const updatedCards = loadedCards.map((card) => {
+        const updatedCards = mergedCards.map((card) => {
           const cardTxsSum = loadedTxs
             .filter((tx) => tx.creditCardId === card.id && tx.type === "expense")
             .reduce((sum, tx) => sum + Number(tx.amount), 0);
@@ -331,7 +337,26 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           return { ...card, currentBalance: effectiveBalance };
         });
 
-        setAccounts(loadedAccounts);
+        // Recalculate account balance from transactions if DB balance is 0 but income transactions exist
+        const updatedAccounts = loadedAccounts.map((acc) => {
+          const accTxsNet = loadedTxs
+            .filter((tx) => !tx.creditCardId && tx.accountId === acc.id)
+            .reduce((sum, tx) => {
+              if (tx.type === "income") return sum + Number(tx.amount);
+              if (tx.type === "expense") return sum - Number(tx.amount);
+              return sum;
+            }, 0);
+
+          const effectiveBal = acc.balance === 0 && accTxsNet > 0 ? accTxsNet : Math.max(acc.balance, accTxsNet);
+
+          if (effectiveBal !== acc.balance && user && supabase && isValidUUID(acc.id)) {
+            syncAccountBalanceToDb(acc.id, effectiveBal);
+          }
+
+          return { ...acc, balance: effectiveBal };
+        });
+
+        setAccounts(updatedAccounts);
         setCreditCards(updatedCards);
         setSubscriptions((dbSubs || []).map(mapSubscriptionRow));
         setTransactions(loadedTxs);
@@ -465,6 +490,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
     let updatedAccountBalance: number | null = null;
 
+    if (!newTx.creditCardId && newTx.accountId) {
+      const targetAcc = accounts.find((a) => a.id === newTx.accountId);
+      if (targetAcc) {
+        let bal = Number(targetAcc.balance);
+        if (newTx.type === "income") bal += Number(newTx.amount);
+        else if (newTx.type === "expense") bal -= Number(newTx.amount);
+        updatedAccountBalance = bal;
+      }
+    }
+
     // Update account balance optimistically (only for non-credit card transactions)
     setAccounts((prev) =>
       prev.map((acc) => {
@@ -472,7 +507,6 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           let newBal = Number(acc.balance);
           if (newTx.type === "income") newBal += Number(newTx.amount);
           else if (newTx.type === "expense") newBal -= Number(newTx.amount);
-          updatedAccountBalance = newBal;
           return { ...acc, balance: newBal };
         }
         if (newTx.type === "transfer" && acc.id === newTx.toAccountId) {
@@ -553,12 +587,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           if (payload.account_id) {
             const accObj = accounts.find((a) => a.id === payload.account_id);
             if (accObj) {
+              const accBalToSync = updatedAccountBalance !== null
+                ? updatedAccountBalance
+                : (newTx.type === "income" ? Number(accObj.balance) + Number(newTx.amount) : Number(accObj.balance) - Number(newTx.amount));
+
               await supabase.from("accounts").upsert({
                 id: accObj.id,
                 user_id: user.id,
                 name: accObj.name,
                 type: accObj.type,
-                balance: updatedAccountBalance !== null ? updatedAccountBalance : accObj.balance,
+                balance: accBalToSync,
                 currency: accObj.currency || "THB",
                 icon: accObj.icon || null,
                 color: accObj.color || null,
