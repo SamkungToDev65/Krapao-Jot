@@ -490,11 +490,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
     // If transaction linked to credit card
     if (newTx.creditCardId && newTx.type === "expense") {
+      const cardObj = creditCards.find((c) => c.id === newTx.creditCardId);
+      if (cardObj) {
+        updatedCardBalance = Number(cardObj.currentBalance) + Number(newTx.amount);
+      }
       setCreditCards((prev) =>
         prev.map((c) => {
           if (c.id === newTx.creditCardId) {
             const newBal = Number(c.currentBalance) + Number(newTx.amount);
-            updatedCardBalance = newBal;
             return { ...c, currentBalance: newBal, isPaidThisMonth: false };
           }
           return c;
@@ -526,6 +529,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           if (payload.credit_card_id) {
             const cardObj = creditCards.find((c) => c.id === payload.credit_card_id);
             if (cardObj) {
+              const cardBalToSync = updatedCardBalance !== null 
+                ? updatedCardBalance 
+                : (Number(cardObj.currentBalance) + Number(newTx.amount));
+
               await supabase.from("credit_cards").upsert({
                 id: cardObj.id,
                 user_id: user.id,
@@ -533,7 +540,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
                 bank: cardObj.bank,
                 last_four_digits: cardObj.lastFourDigits,
                 credit_limit: cardObj.creditLimit,
-                current_balance: updatedCardBalance !== null ? updatedCardBalance : cardObj.currentBalance,
+                current_balance: cardBalToSync,
                 statement_day: cardObj.statementDay,
                 due_day: cardObj.dueDay,
                 card_color: cardObj.cardColor,
