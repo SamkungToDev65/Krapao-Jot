@@ -247,16 +247,16 @@ span.flatpickr-weekday {
   justify-content: space-around !important;
 }
 
-/* Individual Day: Spacious circular pill */
+/* Individual Day: Spacious circular pill (min 40px touch target) */
 .flatpickr-day {
   border-radius: 9999px !important;
   color: var(--fg-primary) !important;
   font-size: 0.875rem !important;
   font-weight: 500 !important;
-  height: 38px !important;
-  line-height: 38px !important;
-  width: 38px !important;
-  max-width: 38px !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  width: 40px !important;
+  max-width: 40px !important;
   flex-basis: 14.28% !important;
   margin: 2px auto !important;
   border: 1px solid transparent !important;
@@ -301,6 +301,7 @@ span.flatpickr-weekday {
     left: 50% !important;
     transform: translateX(-50%) !important;
     width: min(340px, 94vw) !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45) !important;
   }
 }
 

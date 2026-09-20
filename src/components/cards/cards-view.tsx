@@ -19,11 +19,14 @@ import {
   Layers,
   ChevronRight,
   ShieldCheck,
-  Zap
+  Zap,
+  UploadCloud,
+  Check
 } from "lucide-react";
 import { useFinance } from "@/lib/store";
 import { formatCurrency, getDaysUntil } from "@/lib/utils";
 import { CreditCard } from "@/lib/types";
+import { ThaiDatePicker } from "@/components/ui/thai-date-picker";
 import { 
   POPULAR_BANKS, 
   POPULAR_CREDIT_CARDS, 
@@ -165,11 +168,22 @@ export function CreditCardMockup({
 }
 
 export function CardsView() {
-  const { creditCards, accounts, payCreditCard, addCreditCard, deleteCreditCard } = useFinance();
+  const { creditCards, accounts, payCreditCard, addCreditCard, deleteCreditCard, categories, addTransaction } = useFinance();
   const [payingCard, setPayingCard] = useState<CreditCard | null>(null);
   const [selectedPayAccount, setSelectedPayAccount] = useState<string>("");
   const [payAmount, setPayAmount] = useState<string>("");
   const [payCardError, setPayCardError] = useState<string | null>(null);
+
+  // Swipe Card Modal State
+  const [swipingCard, setSwipingCard] = useState<CreditCard | null>(null);
+  const [swipeAmount, setSwipeAmount] = useState<string>("");
+  const [swipeCategoryId, setSwipeCategoryId] = useState<string>("");
+  const [swipeDate, setSwipeDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [swipeNote, setSwipeNote] = useState<string>("");
+  const [swipeSlipPreview, setSwipeSlipPreview] = useState<string | null>(null);
+  const [swipeSlipFileName, setSwipeSlipFileName] = useState<string | null>(null);
+  const [swipeError, setSwipeError] = useState<string | null>(null);
+  const [isSwipeSuccess, setIsSwipeSuccess] = useState(false);
 
   // Add Card Modal State
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -217,6 +231,84 @@ export function CardsView() {
     if (bankAccounts.length > 0) {
       setSelectedPayAccount(bankAccounts[0].id);
     }
+  };
+
+  const handleOpenSwipe = (card: CreditCard) => {
+    setSwipingCard(card);
+    setSwipeAmount("");
+    setSwipeError(null);
+    setSwipeDate(new Date().toISOString().split("T")[0]);
+    setSwipeNote("");
+    setSwipeSlipPreview(null);
+    setSwipeSlipFileName(null);
+    const expenseCategories = categories.filter((c) => c.type === "expense");
+    if (expenseCategories.length > 0) {
+      setSwipeCategoryId(expenseCategories[0].id);
+    }
+  };
+
+  const handleSwipeQuickAdd = (val: number) => {
+    const current = parseFloat(swipeAmount) || 0;
+    setSwipeAmount((current + val).toString());
+    setSwipeError(null);
+  };
+
+  const handleSwipeImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSwipeSlipFileName(file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => setSwipeSlipPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeSwipeSlip = () => {
+    setSwipeSlipPreview(null);
+    setSwipeSlipFileName(null);
+  };
+
+  const handleConfirmSwipe = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!swipingCard) return;
+
+    const num = parseFloat(swipeAmount);
+    if (isNaN(num) || num <= 0) {
+      setSwipeError("กรุณากรอกจำนวนเงินที่ถูกต้อง (มากกว่า 0 บาท)");
+      return;
+    }
+
+    const availableCredit = swipingCard.creditLimit - swipingCard.currentBalance;
+    if (num > availableCredit) {
+      setSwipeError(`ยอดรูดบัตรเกินวงเงินคงเหลือ (วงเงินคงเหลือ ฿${availableCredit.toLocaleString()})`);
+      return;
+    }
+
+    const expenseCategories = categories.filter((c) => c.type === "expense");
+    const category = expenseCategories.find((c) => c.id === swipeCategoryId) || expenseCategories[0];
+
+    addTransaction({
+      type: "expense",
+      amount: num,
+      accountId: "",
+      creditCardId: swipingCard.id,
+      categoryId: category?.id ?? "cat-1",
+      categoryName: category?.name ?? "ทั่วไป",
+      categoryIcon: category?.icon ?? "CreditCard",
+      date: swipeDate,
+      note: swipeNote.trim() || undefined,
+      slipUrl: swipeSlipPreview || undefined,
+    });
+
+    setIsSwipeSuccess(true);
+    setTimeout(() => {
+      setIsSwipeSuccess(false);
+      setSwipingCard(null);
+      setSwipeAmount("");
+      setSwipeNote("");
+      removeSwipeSlip();
+      setSwipeError(null);
+    }, 450);
   };
 
   const handleConfirmPay = (e: React.FormEvent) => {
@@ -366,28 +458,40 @@ export function CardsView() {
                   </div>
                 </div>
 
-                {/* Pay Bill Action Button */}
-                <button
-                  onClick={() => handleOpenPay(card)}
-                  disabled={card.currentBalance <= 0 || card.isPaidThisMonth}
-                  className={`w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    card.isPaidThisMonth || card.currentBalance <= 0
-                      ? "bg-slate-100 dark:bg-slate-800 text-[var(--fg-muted)] cursor-not-allowed"
-                      : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 active:scale-98"
-                  }`}
-                >
-                  {card.isPaidThisMonth || card.currentBalance <= 0 ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      <span>ชำระยอดรอบนี้แล้ว</span>
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="w-4 h-4" />
-                      <span>ชำระยอดบิล</span>
-                    </>
-                  )}
-                </button>
+                {/* Card Action Buttons (รูดบัตร & ชำระยอดบิล) */}
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSwipe(card)}
+                    className="py-3 px-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20 active:scale-98 outline-none focus:outline-none"
+                  >
+                    <CardIcon className="w-4 h-4 shrink-0" />
+                    <span className="truncate">รูดบัตร</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPay(card)}
+                    disabled={card.currentBalance <= 0 || card.isPaidThisMonth}
+                    className={`py-3 px-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer outline-none focus:outline-none ${
+                      card.isPaidThisMonth || card.currentBalance <= 0
+                        ? "bg-slate-100 dark:bg-slate-800 text-[var(--fg-muted)] cursor-not-allowed"
+                        : "bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20 active:scale-98"
+                    }`}
+                  >
+                    {card.isPaidThisMonth || card.currentBalance <= 0 ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span className="truncate">ชำระแล้ว</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-4 h-4 shrink-0" />
+                        <span className="truncate">ชำระยอดบิล</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -510,6 +614,237 @@ export function CardsView() {
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>ยืนยันการชำระเงิน</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Swipe Credit Card Modal */}
+      {swipingCard && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+          onClick={() => setSwipingCard(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-[var(--bg-surface)] border border-purple-500/30 rounded-3xl p-6 shadow-2xl space-y-5 my-auto max-h-[90dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+                  <CardIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[var(--fg-primary)]">
+                    บันทึกรายการรูดบัตรเครดิต
+                  </h3>
+                  <p className="text-xs text-[var(--fg-muted)] mt-0.5">
+                    บันทึกค่าใช้จ่ายผ่านวงเงินบัตร (ไม่หักเงินในบัญชีธนาคาร)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSwipingCard(null)}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-[var(--fg-muted)] hover:text-[var(--fg-primary)] hover:bg-[var(--bg-canvas)] transition-all cursor-pointer outline-none focus:outline-none"
+                aria-label="ปิด"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form noValidate onSubmit={handleConfirmSwipe} className="space-y-4">
+              {/* Card Summary Badge */}
+              <div className="p-4 rounded-2xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shadow-sm">
+                    <CardIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[var(--fg-muted)] font-medium">บัตรที่ใช้รูด</p>
+                    <p className="text-sm font-bold text-[var(--fg-primary)]">
+                      {swipingCard.name} (•••• {swipingCard.lastFourDigits})
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-[var(--fg-muted)]">วงเงินคงเหลือ</p>
+                  <p className="text-sm text-emerald-600 dark:text-emerald-400 font-extrabold">
+                    ฿{(swipingCard.creditLimit - swipingCard.currentBalance).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Amount Input */}
+              <div
+                className={`p-4 rounded-2xl bg-[var(--bg-canvas)] border transition-all ${
+                  swipeError
+                    ? "border-rose-500 ring-2 ring-rose-500/20"
+                    : "border-[var(--border-subtle)] focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/20"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--fg-muted)] uppercase tracking-wider">
+                    จำนวนเงินที่รูด (บาท) <span className="text-rose-500">*</span>
+                  </span>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+                    CREDIT CARD (-)
+                  </span>
+                </div>
+
+                <div className="mt-2 relative flex items-baseline">
+                  <span className="text-3xl sm:text-4xl font-extrabold mr-2 text-purple-600 dark:text-purple-400">
+                    ฿
+                  </span>
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    autoFocus
+                    placeholder="0.00"
+                    value={swipeAmount}
+                    onChange={(e) => {
+                      setSwipeAmount(e.target.value);
+                      if (swipeError) setSwipeError(null);
+                    }}
+                    className="w-full text-3xl sm:text-4xl font-black bg-transparent focus:outline-none placeholder:text-zinc-300 dark:placeholder:text-zinc-700 tabular-nums text-purple-600 dark:text-purple-400"
+                  />
+                </div>
+
+                {swipeError && (
+                  <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-rose-200/50 dark:border-rose-900/40 text-xs text-rose-500 dark:text-rose-400 font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{swipeError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Amount Buttons */}
+              <div className="grid grid-cols-4 gap-2">
+                {[100, 300, 500, 1000].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => handleSwipeQuickAdd(val)}
+                    className="py-1.5 text-xs font-bold rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] hover:border-purple-500 hover:text-purple-600 dark:hover:text-purple-400 transition-all cursor-pointer active:scale-95 text-[var(--fg-primary)] outline-none focus:outline-none"
+                  >
+                    +{val.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+
+              {/* Category Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-[var(--fg-primary)] mb-1.5">
+                  หมวดหมู่ค่าใช้จ่าย
+                </label>
+                <select
+                  value={swipeCategoryId}
+                  onChange={(e) => setSwipeCategoryId(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-xs sm:text-sm font-semibold text-[var(--fg-primary)] outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition cursor-pointer"
+                >
+                  {categories
+                    .filter((c) => c.type === "expense")
+                    .map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Date & Merchant Note */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <ThaiDatePicker
+                    label="วันที่ทำรายการ"
+                    value={swipeDate}
+                    onChange={setSwipeDate}
+                    showBuddhistEra={true}
+                    accentColor="rose"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--fg-primary)] mb-1.5">
+                    ร้านค้า / รายละเอียด
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="เช่น เซ็นทรัล, ช้อปปี้, ร้านอาหาร"
+                    value={swipeNote}
+                    onChange={(e) => setSwipeNote(e.target.value)}
+                    className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--fg-primary)] placeholder:text-zinc-400 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Slip / Receipt Upload */}
+              <div>
+                <label className="block text-xs font-semibold text-[var(--fg-primary)] mb-1.5">
+                  แนบสลิป / สลิปรูดบัตร (ไม่บังคับ)
+                </label>
+                {!swipeSlipPreview ? (
+                  <label className="relative flex flex-col items-center justify-center p-3.5 border-2 border-dashed border-[var(--border-subtle)] rounded-xl bg-[var(--bg-canvas)] hover:border-purple-400 transition cursor-pointer group">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-[var(--fg-primary)]">
+                      <UploadCloud className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
+                      <span>คลิกเพื่อแนบสลิปการรูดบัตร</span>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleSwipeImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                ) : (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)]">
+                    <div className="flex items-center gap-2.5 truncate">
+                      <div className="relative w-9 h-9 rounded-lg overflow-hidden border border-[var(--border-subtle)] shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={swipeSlipPreview} alt="Slip" className="w-full h-full object-cover" />
+                      </div>
+                      <span className="text-xs font-semibold text-[var(--fg-primary)] truncate">
+                        {swipeSlipFileName || "สลิปรูดบัตร"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeSwipeSlip}
+                      className="p-1 text-slate-400 hover:text-rose-500 transition cursor-pointer outline-none focus:outline-none"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSwipingCard(null)}
+                  className="py-3 px-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-canvas)] text-xs font-semibold text-[var(--fg-muted)] hover:text-[var(--fg-primary)] transition-all cursor-pointer outline-none focus:outline-none"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSwipeSuccess}
+                  className="py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-600/25 active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-1.5 outline-none focus:outline-none"
+                >
+                  {isSwipeSuccess ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>บันทึกสำเร็จ</span>
+                    </>
+                  ) : (
+                    <>
+                      <CardIcon className="w-4 h-4" />
+                      <span>ยืนยันการรูดบัตร</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

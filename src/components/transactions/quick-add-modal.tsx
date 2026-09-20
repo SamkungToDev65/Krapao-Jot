@@ -5,7 +5,6 @@ import {
   X,
   ArrowDownRight,
   ArrowUpRight,
-  CreditCard,
   Wallet,
   FileText,
   UploadCloud,
@@ -20,9 +19,9 @@ import {
   Sparkles,
   TrendingUp,
   Laptop,
+  CreditCard,
   Trash2,
   AlertCircle,
-  Calendar,
 } from "lucide-react";
 import { useFinance } from "@/lib/store";
 import { TransactionType } from "@/lib/types";
@@ -50,20 +49,19 @@ const CATEGORY_ICON_MAP: Record<string, React.ElementType> = {
 const QUICK_AMOUNTS = [100, 300, 500, 1000];
 
 export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
-  const { accounts, creditCards, categories, addTransaction } = useFinance();
+  const { accounts, categories, addTransaction } = useFinance();
 
   const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState<string>("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
-  const [paymentType, setPaymentType] = useState<"account" | "card">("account");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
-  const [selectedCardId, setSelectedCardId] = useState<string>("");
   const [date, setDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [note, setNote] = useState<string>("");
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
   const [slipFileName, setSlipFileName] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   const isExpense = type === "expense";
 
@@ -83,14 +81,14 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
     }
   }, [currentCategories, selectedCategoryId]);
 
-  // Set initial accounts / cards
+  // Reset modal state on open
   useEffect(() => {
     if (isOpen) {
       setErrorMsg(null);
-      if (accounts.length > 0 && !selectedAccountId) setSelectedAccountId(accounts[0].id);
-      if (creditCards.length > 0 && !selectedCardId) setSelectedCardId(creditCards[0].id);
+      setAccountError(null);
+      setSelectedAccountId("");
     }
-  }, [isOpen, accounts, creditCards, selectedAccountId, selectedCardId]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -117,20 +115,27 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    let hasError = false;
+
     const num = parseFloat(amount);
     if (isNaN(num) || num <= 0) {
       setErrorMsg("กรุณาระบุจำนวนเงินที่ถูกต้อง (มากกว่า 0)");
-      return;
+      hasError = true;
     }
 
+    if (!selectedAccountId) {
+      setAccountError("กรุณาเลือกบัญชีสำหรับทำรายการ");
+      hasError = true;
+    }
+
+    if (hasError) return;
+
     const category = currentCategories.find((c) => c.id === selectedCategoryId) || currentCategories[0];
-    const isCard = isExpense && paymentType === "card";
 
     addTransaction({
       type,
       amount: num,
-      accountId: selectedAccountId || (accounts[0]?.id ?? ""),
-      creditCardId: isCard ? selectedCardId : undefined,
+      accountId: selectedAccountId,
       categoryId: category?.id ?? "cat-1",
       categoryName: category?.name ?? "ทั่วไป",
       categoryIcon: category?.icon ?? "Utensils",
@@ -144,14 +149,15 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
       setIsSuccess(false);
       setAmount("");
       setNote("");
+      setSelectedAccountId("");
       removeSlip();
       setErrorMsg(null);
+      setAccountError(null);
       onClose();
     }, 450);
   };
 
   const activeCategory = currentCategories.find((c) => c.id === selectedCategoryId) || currentCategories[0];
-  const selectedCard = creditCards.find((c) => c.id === selectedCardId);
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
   return (
@@ -160,14 +166,28 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-4xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto animate-in zoom-in-95 duration-200"
+        className={`w-full max-w-4xl bg-[var(--bg-surface)] border rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto animate-in zoom-in-95 duration-200 transition-all ${
+          isExpense
+            ? "border-rose-500/40 shadow-rose-500/10"
+            : "border-emerald-500/40 shadow-emerald-500/10"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Segment */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[var(--border-subtle)] shrink-0 bg-[var(--bg-surface)]">
+        <div
+          className={`flex items-center justify-between px-5 sm:px-6 py-4 border-b shrink-0 bg-[var(--bg-surface)] transition-colors ${
+            isExpense ? "border-rose-500/20" : "border-emerald-500/20"
+          }`}
+        >
           <div className="flex items-center gap-3">
             <div className="space-y-0.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              <span
+                className={`text-xs font-bold uppercase tracking-wider transition-colors ${
+                  isExpense
+                    ? "text-rose-600 dark:text-rose-400"
+                    : "text-emerald-600 dark:text-emerald-400"
+                }`}
+              >
                 Transaction Entry
               </span>
               <h2 className="text-base sm:text-lg font-bold text-[var(--fg-primary)]">
@@ -234,7 +254,9 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
                 className={`p-4 rounded-2xl bg-[var(--bg-surface)] border transition-all ${
                   errorMsg
                     ? "border-rose-500 ring-2 ring-rose-500/20"
-                    : "border-[var(--border-subtle)] focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20"
+                    : isExpense
+                    ? "border-rose-500/40 focus-within:border-rose-500 focus-within:ring-2 focus-within:ring-rose-500/20"
+                    : "border-emerald-500/40 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20"
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -300,8 +322,8 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
                       onClick={() => handleQuickAdd(val)}
                       className={`py-2 text-xs font-bold rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-canvas)] transition-all cursor-pointer active:scale-95 outline-none focus:outline-none ${
                         isExpense
-                          ? "hover:border-rose-500/40 hover:text-rose-600 dark:hover:text-rose-400 text-[var(--fg-primary)]"
-                          : "hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400 text-[var(--fg-primary)]"
+                          ? "hover:border-rose-500/50 hover:text-rose-600 dark:hover:text-rose-400 text-[var(--fg-primary)]"
+                          : "hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-400 text-[var(--fg-primary)]"
                       }`}
                     >
                       +{val.toLocaleString()}
@@ -311,7 +333,11 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
               </div>
 
               {/* Live Preview Card */}
-              <div className="p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-xs space-y-2.5">
+              <div
+                className={`p-4 rounded-2xl bg-[var(--bg-surface)] border shadow-xs space-y-2.5 transition-colors ${
+                  isExpense ? "border-rose-500/20" : "border-emerald-500/20"
+                }`}
+              >
                 <div className="flex items-center justify-between text-xs pb-1.5 border-b border-[var(--border-subtle)]">
                   <span className="text-[var(--fg-muted)] font-medium">สถานะรายการ</span>
                   <span
@@ -329,11 +355,15 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-[var(--fg-muted)] font-medium">ช่องทาง</span>
-                  <span className="font-bold text-[var(--fg-primary)]">
-                    {isExpense && paymentType === "card"
-                      ? selectedCard?.name || "บัตรเครดิต"
-                      : selectedAccount?.name || "กระเป๋าเงิน"}
+                  <span className="text-[var(--fg-muted)] font-medium">บัญชีเป้าหมาย</span>
+                  <span
+                    className={`font-bold ${
+                      selectedAccount
+                        ? "text-[var(--fg-primary)]"
+                        : "text-amber-500 dark:text-amber-400 italic"
+                    }`}
+                  >
+                    {selectedAccount?.name || "ยังไม่ได้เลือกบัญชี"}
                   </span>
                 </div>
               </div>
@@ -412,70 +442,50 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
               </div>
             </div>
 
-            {/* 2. Payment Source Selection */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-[var(--fg-primary)]">
-                  {isExpense ? "ช่องทางจ่ายเงิน" : "เข้ากระเป๋า / บัญชี"}
-                </label>
-                {isExpense && creditCards.length > 0 && (
-                  <div className="flex bg-[var(--bg-canvas)] p-0.5 rounded-xl border border-[var(--border-subtle)] text-xs font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentType("account")}
-                      className={`px-3 py-1 rounded-lg transition cursor-pointer outline-none focus:outline-none ${
-                        paymentType === "account"
-                          ? "bg-[var(--bg-surface)] text-[var(--fg-primary)] font-bold shadow-xs"
-                          : "text-[var(--fg-muted)] hover:text-[var(--fg-primary)]"
-                      }`}
-                    >
-                      เงินสด / บัญชี
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentType("card")}
-                      className={`px-3 py-1 rounded-lg transition cursor-pointer outline-none focus:outline-none ${
-                        paymentType === "card"
-                          ? "bg-[var(--bg-surface)] text-rose-600 dark:text-rose-400 font-bold shadow-xs"
-                          : "text-[var(--fg-muted)] hover:text-[var(--fg-primary)]"
-                      }`}
-                    >
-                      บัตรเครดิต
-                    </button>
-                  </div>
-                )}
+            {/* 2. Payment Source Selection (Accounts only, default to "เลือกบัญชี") */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-[var(--fg-primary)]">
+                {isExpense ? "ตัดเงินจากกระเป๋า / บัญชี" : "นำเงินเข้ากระเป๋า / บัญชี"}{" "}
+                <span className="text-rose-500">*</span>
+              </label>
+
+              <div className="relative flex items-center group">
+                <Wallet
+                  className={`w-4 h-4 absolute left-3.5 pointer-events-none transition-colors ${
+                    accountError
+                      ? "text-rose-500"
+                      : isExpense
+                      ? "text-zinc-400 group-focus-within:text-rose-500"
+                      : "text-zinc-400 group-focus-within:text-emerald-500"
+                  }`}
+                />
+                <select
+                  value={selectedAccountId}
+                  onChange={(e) => {
+                    setSelectedAccountId(e.target.value);
+                    if (accountError) setAccountError(null);
+                  }}
+                  className={`w-full h-11 pl-10 pr-4 rounded-xl bg-[var(--bg-canvas)] border text-xs sm:text-sm font-semibold text-[var(--fg-primary)] outline-none transition cursor-pointer shadow-2xs ${
+                    accountError
+                      ? "border-rose-500 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                      : isExpense
+                      ? "border-[var(--border-subtle)] hover:border-rose-400 dark:hover:border-rose-600 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                      : "border-[var(--border-subtle)] hover:border-emerald-400 dark:hover:border-emerald-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                  }`}
+                >
+                  <option value="">-- เลือกบัญชี --</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.type === "cash" ? "เงินสด" : "บัญชี"}) — ฿{acc.balance.toLocaleString()}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {isExpense && paymentType === "card" ? (
-                <div className="relative flex items-center">
-                  <CreditCard className="w-4 h-4 text-rose-500 absolute left-3.5 pointer-events-none" />
-                  <select
-                    value={selectedCardId}
-                    onChange={(e) => setSelectedCardId(e.target.value)}
-                    className="w-full h-11 pl-10 pr-4 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-xs sm:text-sm font-semibold text-[var(--fg-primary)] outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition cursor-pointer"
-                  >
-                    {creditCards.map((card) => (
-                      <option key={card.id} value={card.id}>
-                        {card.name} (•••• {card.lastFourDigits})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="relative flex items-center">
-                  <Wallet className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none" />
-                  <select
-                    value={selectedAccountId}
-                    onChange={(e) => setSelectedAccountId(e.target.value)}
-                    className="w-full h-11 pl-10 pr-4 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-xs sm:text-sm font-semibold text-[var(--fg-primary)] outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition cursor-pointer"
-                  >
-                    {accounts.map((acc) => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.name} ({acc.type === "cash" ? "เงินสด" : "บัญชี"}) — ฿{acc.balance.toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {accountError && (
+                <p className="text-xs text-rose-500 dark:text-rose-400 mt-1 font-medium">
+                  {accountError}
+                </p>
               )}
             </div>
 
@@ -487,20 +497,31 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
                   value={date}
                   onChange={setDate}
                   showBuddhistEra={true}
+                  accentColor={isExpense ? "rose" : "emerald"}
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-[var(--fg-primary)] mb-1.5">
                   รายละเอียด / โน้ตกำกับ
                 </label>
-                <div className="relative flex items-center">
-                  <FileText className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none" />
+                <div className="relative flex items-center group">
+                  <FileText
+                    className={`w-4 h-4 absolute left-3.5 pointer-events-none transition-colors ${
+                      isExpense
+                        ? "text-zinc-400 group-focus-within:text-rose-500"
+                        : "text-zinc-400 group-focus-within:text-emerald-500"
+                    }`}
+                  />
                   <input
                     type="text"
                     placeholder="เช่น ข้าวกลางวัน, ค่าไฟ, เงินเดือน"
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    className="w-full h-11 pl-10 pr-3 rounded-xl bg-[var(--bg-canvas)] border border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--fg-primary)] placeholder:text-zinc-400 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                    className={`w-full h-11 pl-10 pr-3 rounded-xl bg-[var(--bg-canvas)] border text-xs sm:text-sm text-[var(--fg-primary)] placeholder:text-zinc-400 outline-none transition shadow-2xs ${
+                      isExpense
+                        ? "border-[var(--border-subtle)] hover:border-rose-400 dark:hover:border-rose-600 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                        : "border-[var(--border-subtle)] hover:border-emerald-400 dark:hover:border-emerald-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                    }`}
                   />
                 </div>
               </div>
