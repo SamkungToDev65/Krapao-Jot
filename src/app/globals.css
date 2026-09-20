@@ -1,0 +1,308 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: var(--font-prompt), var(--font-plus-jakarta), sans-serif;
+  --font-display: var(--font-plus-jakarta), var(--font-prompt), sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root {
+  /* 60% Dominant Canvas & Surfaces */
+  --bg-canvas: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #FFFFFF;
+  
+  /* 30% Secondary Structure & Text */
+  --fg-primary: #0F172A;
+  --fg-secondary: #334155;
+  --fg-muted: #64748B;
+  --border-subtle: #E2E8F0;
+  --border-strong: #CBD5E1;
+  --card-bg: #FFFFFF;
+  
+  /* 10% Accent Voltages */
+  --accent-mint: #10B981;
+  --accent-mint-hover: #059669;
+  --accent-mint-subtle: rgba(16, 185, 129, 0.1);
+  --accent-coral: #F43F5E;
+  --accent-coral-subtle: rgba(244, 63, 94, 0.1);
+  --accent-amber: #F59E0B;
+  --accent-amber-subtle: rgba(245, 158, 11, 0.1);
+  --accent-indigo: #6366F1;
+  --accent-indigo-subtle: rgba(99, 102, 241, 0.1);
+}
+
+.dark {
+  /* 60% Dominant Canvas & Surfaces */
+  --bg-canvas: #090D16;
+  --bg-surface: #111726;
+  --bg-surface-elevated: #161F33;
+  
+  /* 30% Secondary Structure & Text */
+  --fg-primary: #F8FAFC;
+  --fg-secondary: #CBD5E1;
+  --fg-muted: #94A3B8;
+  --border-subtle: #1E293B;
+  --border-strong: #334155;
+  --card-bg: #111726;
+  
+  /* 10% Accent Voltages */
+  --accent-mint: #34D399;
+  --accent-mint-hover: #10B981;
+  --accent-mint-subtle: rgba(52, 211, 153, 0.15);
+  --accent-coral: #FB7185;
+  --accent-coral-subtle: rgba(251, 113, 133, 0.15);
+  --accent-amber: #FBBF24;
+  --accent-amber-subtle: rgba(251, 191, 36, 0.15);
+  --accent-indigo: #818CF8;
+  --accent-indigo-subtle: rgba(129, 140, 248, 0.15);
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--fg-primary);
+  font-family: var(--font-prompt), var(--font-plus-jakarta), sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Remove browser default black focus outline across all modals and inputs */
+*:focus,
+*:focus-visible,
+input:focus,
+button:focus,
+select:focus,
+textarea:focus {
+  outline: none !important;
+}
+
+/* Safe area for mobile devices */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+
+.dark .glass-panel {
+  background: rgba(17, 23, 38, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+/* ================= KRAPAO JOT FLATPICKR THAI THEME ================= */
+.flatpickr-wrapper {
+  display: block !important;
+  width: 100% !important;
+  position: relative !important;
+}
+
+.flatpickr-calendar {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 1.25rem !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+  font-family: var(--font-sans) !important;
+  padding: 0.875rem 0.75rem 1rem !important;
+  width: 340px !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+  z-index: 99999 !important;
+}
+
+.flatpickr-calendar.static {
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  left: 0 !important;
+  right: auto !important;
+  margin-top: 0 !important;
+}
+
+.flatpickr-calendar::before,
+.flatpickr-calendar::after {
+  display: none !important;
+}
+
+/* Months Header */
+.flatpickr-months {
+  padding-bottom: 0.625rem !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  align-items: center !important;
+  position: relative !important;
+}
+
+.flatpickr-current-month {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.35rem !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  color: var(--fg-primary) !important;
+  padding-top: 0.25rem !important;
+}
+
+.flatpickr-current-month .cur-month {
+  font-weight: 700 !important;
+  color: var(--fg-primary) !important;
+}
+
+.flatpickr-current-month select.flatpickr-monthDropdown-months {
+  font-weight: 700 !important;
+  color: var(--fg-primary) !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  font-size: 1rem !important;
+  padding: 0.2rem 0.35rem !important;
+}
+
+.flatpickr-current-month input.cur-year {
+  font-weight: 700 !important;
+  color: var(--fg-primary) !important;
+  font-size: 1rem !important;
+}
+
+.flatpickr-current-month .numInputWrapper span {
+  display: none !important;
+}
+
+/* Navigation Arrows */
+.flatpickr-prev-month,
+.flatpickr-next-month {
+  padding: 0.5rem !important;
+  border-radius: 0.625rem !important;
+  color: var(--fg-muted) !important;
+  fill: var(--fg-muted) !important;
+  transition: all 0.15s ease !important;
+}
+
+.flatpickr-prev-month:hover,
+.flatpickr-next-month:hover {
+  background: var(--bg-canvas) !important;
+  color: var(--fg-primary) !important;
+  fill: var(--fg-primary) !important;
+}
+
+/* Weekday Row: Prominent dark bold text, evenly distributed across 7 columns */
+.flatpickr-weekdays {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0.35rem 0 0.15rem !important;
+}
+
+.flatpickr-weekdaycontainer {
+  width: 100% !important;
+  display: flex !important;
+  justify-content: space-around !important;
+}
+
+span.flatpickr-weekday {
+  flex: 1 1 0% !important;
+  width: 14.28% !important;
+  text-align: center !important;
+  color: var(--fg-primary) !important;
+  font-weight: 700 !important;
+  font-size: 0.8125rem !important;
+}
+
+/* Days Container & Grid */
+.flatpickr-days {
+  width: 100% !important;
+}
+
+.dayContainer {
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: space-around !important;
+}
+
+/* Individual Day: Spacious circular pill */
+.flatpickr-day {
+  border-radius: 9999px !important;
+  color: var(--fg-primary) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  height: 38px !important;
+  line-height: 38px !important;
+  width: 38px !important;
+  max-width: 38px !important;
+  flex-basis: 14.28% !important;
+  margin: 2px auto !important;
+  border: 1px solid transparent !important;
+  transition: all 0.15s ease !important;
+  text-align: center !important;
+}
+
+.flatpickr-day:hover {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+  color: #10B981 !important;
+}
+
+/* Today: Clean circular ring matching reference image */
+.flatpickr-day.today {
+  border-color: #94a3b8 !important;
+  color: var(--fg-primary) !important;
+  background: transparent !important;
+  font-weight: 700 !important;
+}
+
+/* Selected: Distinct circular active state */
+.flatpickr-day.selected,
+.flatpickr-day.selected:hover {
+  background: #10B981 !important;
+  border-color: #10B981 !important;
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3) !important;
+}
+
+.flatpickr-day.flatpickr-disabled,
+.flatpickr-day.prevMonthDay,
+.flatpickr-day.nextMonthDay {
+  color: var(--fg-muted) !important;
+  opacity: 0.35 !important;
+}
+
+/* Mobile Responsive Modal Overrides */
+@media (max-width: 640px) {
+  .flatpickr-calendar.static {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: min(340px, 94vw) !important;
+  }
+}
+
+
+
