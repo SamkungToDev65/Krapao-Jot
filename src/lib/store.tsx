@@ -302,10 +302,39 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
         if (!isMounted) return;
 
-        setAccounts((dbAccounts || []).map(mapAccountRow));
-        setCreditCards((dbCards || []).map(mapCreditCardRow));
+        const loadedAccounts = (dbAccounts || []).map(mapAccountRow);
+        const loadedCards = (dbCards || []).map(mapCreditCardRow);
+        const loadedTxs = (dbTxs || []).map(mapTransactionRow);
+
+        // Recalculate credit card currentBalance based on transactions for perfect accuracy
+        const updatedCards = loadedCards.map((card) => {
+          const cardTxsSum = loadedTxs
+            .filter((tx) => tx.creditCardId === card.id && tx.type === "expense")
+            .reduce((sum, tx) => sum + Number(tx.amount), 0);
+
+          const effectiveBalance = card.isPaidThisMonth
+            ? card.currentBalance
+            : Math.max(card.currentBalance, cardTxsSum);
+
+          // Auto-sync balance to Supabase DB if mismatched
+          if (effectiveBalance !== card.currentBalance && user && supabase && isValidUUID(card.id)) {
+            supabase
+              .from("credit_cards")
+              .update({ current_balance: effectiveBalance })
+              .eq("id", card.id)
+              .eq("user_id", user.id)
+              .then(({ error }) => {
+                if (error) console.error("Failed to sync updated credit card balance:", error);
+              });
+          }
+
+          return { ...card, currentBalance: effectiveBalance };
+        });
+
+        setAccounts(loadedAccounts);
+        setCreditCards(updatedCards);
         setSubscriptions((dbSubs || []).map(mapSubscriptionRow));
-        setTransactions((dbTxs || []).map(mapTransactionRow));
+        setTransactions(loadedTxs);
         setLoans((dbLoans || []).map(mapLoanRow));
         setInvestments((dbInvs || []).map(mapInvestmentRow));
         setInvestmentTransactions((dbInvTxs || []).map(mapInvestmentTxRow));
