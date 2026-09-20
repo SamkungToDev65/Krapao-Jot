@@ -347,7 +347,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
               return sum;
             }, 0);
 
-          const effectiveBal = acc.balance === 0 && accTxsNet > 0 ? accTxsNet : Math.max(acc.balance, accTxsNet);
+          const effectiveBal = acc.balance === 0 && accTxsNet > 0 ? accTxsNet : acc.balance;
 
           if (effectiveBal !== acc.balance && user && supabase && isValidUUID(acc.id)) {
             syncAccountBalanceToDb(acc.id, effectiveBal);
@@ -489,6 +489,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setTransactions((prev) => [newTx, ...prev]);
 
     let updatedAccountBalance: number | null = null;
+    let updatedToAccountBalance: number | null = null;
 
     // Update account balance optimistically (only for non-credit card transactions)
     setAccounts((prev) =>
@@ -496,7 +497,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         if (!newTx.creditCardId && newTx.accountId && acc.id === newTx.accountId) {
           let newBal = Number(acc.balance);
           if (newTx.type === "income") newBal += Number(newTx.amount);
-          else if (newTx.type === "expense") newBal -= Number(newTx.amount);
+          else if (newTx.type === "expense" || newTx.type === "transfer") newBal -= Number(newTx.amount);
           updatedAccountBalance = newBal;
           if (user && supabase && isValidUUID(acc.id)) {
             syncAccountBalanceToDb(acc.id, newBal);
@@ -505,6 +506,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         }
         if (newTx.type === "transfer" && acc.id === newTx.toAccountId) {
           const newBal = Number(acc.balance) + Number(newTx.amount);
+          updatedToAccountBalance = newBal;
           if (user && supabase && isValidUUID(acc.id)) {
             syncAccountBalanceToDb(acc.id, newBal);
           }
@@ -557,6 +559,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           if (payload.credit_card_id) {
             const cardObj = creditCards.find((c) => c.id === payload.credit_card_id);
             if (cardObj) {
+              const cardBal = updatedCardBalance !== null ? updatedCardBalance : (Number(cardObj.currentBalance) + Number(newTx.amount));
               await supabase.from("credit_cards").upsert({
                 id: cardObj.id,
                 user_id: user.id,
@@ -564,7 +567,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
                 bank: cardObj.bank,
                 last_four_digits: cardObj.lastFourDigits,
                 credit_limit: cardObj.creditLimit,
-                current_balance: updatedCardBalance !== null ? updatedCardBalance : (Number(cardObj.currentBalance) + Number(newTx.amount)),
+                current_balance: cardBal,
                 statement_day: cardObj.statementDay,
                 due_day: cardObj.dueDay,
                 card_color: cardObj.cardColor,
@@ -573,21 +576,48 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             }
           }
 
-          // Auto-upsert linked account to DB if missing from foreign table
+          // Auto-upsert linked primary account to DB if missing from foreign table
           if (payload.account_id) {
             const accObj = accounts.find((a) => a.id === payload.account_id);
             if (accObj) {
+              let computedBal = Number(accObj.balance);
+              if (newTx.type === "income") computedBal += Number(newTx.amount);
+              else if (newTx.type === "expense" || newTx.type === "transfer") computedBal -= Number(newTx.amount);
+              const accBal = updatedAccountBalance !== null ? updatedAccountBalance : computedBal;
+
               await supabase.from("accounts").upsert({
                 id: accObj.id,
                 user_id: user.id,
                 name: accObj.name,
                 type: accObj.type,
-                balance: updatedAccountBalance !== null ? updatedAccountBalance : accObj.balance,
+                balance: accBal,
                 currency: accObj.currency || "THB",
                 icon: accObj.icon || null,
                 color: accObj.color || null,
                 account_number: accObj.accountNumber || null,
                 bank_name: accObj.bankName || null,
+              }, { onConflict: "id" });
+            }
+          }
+
+          // Auto-upsert target transfer account to DB if missing from foreign table
+          if (payload.to_account_id) {
+            const toAccObj = accounts.find((a) => a.id === payload.to_account_id);
+            if (toAccObj) {
+              const computedToBal = Number(toAccObj.balance) + Number(newTx.amount);
+              const toAccBal = updatedToAccountBalance !== null ? updatedToAccountBalance : computedToBal;
+
+              await supabase.from("accounts").upsert({
+                id: toAccObj.id,
+                user_id: user.id,
+                name: toAccObj.name,
+                type: toAccObj.type,
+                balance: toAccBal,
+                currency: toAccObj.currency || "THB",
+                icon: toAccObj.icon || null,
+                color: toAccObj.color || null,
+                account_number: toAccObj.accountNumber || null,
+                bank_name: toAccObj.bankName || null,
               }, { onConflict: "id" });
             }
           }
@@ -632,7 +662,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         if (!target.creditCardId && target.accountId && acc.id === target.accountId) {
           changed = true;
           if (target.type === "income") newBal -= Number(target.amount);
-          else if (target.type === "expense") newBal += Number(target.amount);
+          else if (target.type === "expense" || target.type === "transfer") newBal += Number(target.amount);
         }
         if (target.type === "transfer" && acc.id === target.toAccountId) {
           changed = true;
@@ -770,18 +800,6 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const card = creditCards.find((c) => c.id === cardId);
     if (!card) return;
 
-    // Deduct from paying account
-    let updatedAccBal = 0;
-    setAccounts((prev) =>
-      prev.map((acc) => {
-        if (acc.id === fromAccountId) {
-          updatedAccBal = Number(acc.balance) - Number(amount);
-          return { ...acc, balance: updatedAccBal };
-        }
-        return acc;
-      })
-    );
-
     // Update credit card balance
     let updatedCardBal = 0;
     setCreditCards((prev) =>
@@ -798,7 +816,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       })
     );
 
-    // Create payment transaction record
+    // Create payment transaction record (addTransaction handles account deduction & DB sync)
     addTransaction({
       type: "expense",
       amount,
@@ -810,9 +828,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       note: `ชำระยอดบัตร ${card.bank} ${card.name} (••${card.lastFourDigits})`,
     });
 
-    if (user && supabase) {
-      if (isValidUUID(fromAccountId)) syncAccountBalanceToDb(fromAccountId, updatedAccBal);
-      if (isValidUUID(cardId)) syncCreditCardToDb(cardId, updatedCardBal, true);
+    if (user && supabase && isValidUUID(cardId)) {
+      syncCreditCardToDb(cardId, updatedCardBal, true);
     }
   };
 
