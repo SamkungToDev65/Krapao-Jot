@@ -433,10 +433,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
     let updatedAccountBalance: number | null = null;
 
-    // Update account balance optimistically
+    // Update account balance optimistically (only for non-credit card transactions)
     setAccounts((prev) =>
       prev.map((acc) => {
-        if (acc.id === newTx.accountId) {
+        if (!newTx.creditCardId && newTx.accountId && acc.id === newTx.accountId) {
           let newBal = Number(acc.balance);
           if (newTx.type === "income") newBal += Number(newTx.amount);
           else if (newTx.type === "expense") newBal -= Number(newTx.amount);
@@ -478,7 +478,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           user_id: user.id,
           type: newTx.type,
           amount: newTx.amount,
-          account_id: isValidUUID(newTx.accountId) ? newTx.accountId : null,
+          account_id: !newTx.creditCardId && newTx.accountId && isValidUUID(newTx.accountId) ? newTx.accountId : null,
           to_account_id: newTx.toAccountId && isValidUUID(newTx.toAccountId) ? newTx.toAccountId : null,
           category_id: newTx.categoryId && isValidUUID(newTx.categoryId) ? newTx.categoryId : null,
           category_name: newTx.categoryName || null,
@@ -493,7 +493,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           if (error) console.error("Failed to insert transaction in Supabase:", error);
         });
 
-      if (updatedAccountBalance !== null && isValidUUID(newTx.accountId)) {
+      if (updatedAccountBalance !== null && !newTx.creditCardId && isValidUUID(newTx.accountId)) {
         syncAccountBalanceToDb(newTx.accountId, updatedAccountBalance);
       }
       if (updatedCardBalance !== null && newTx.creditCardId && isValidUUID(newTx.creditCardId)) {
@@ -513,7 +513,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       prev.map((acc) => {
         let newBal = Number(acc.balance);
         let changed = false;
-        if (acc.id === target.accountId) {
+        if (!target.creditCardId && target.accountId && acc.id === target.accountId) {
           changed = true;
           if (target.type === "income") newBal -= Number(target.amount);
           else if (target.type === "expense") newBal += Number(target.amount);
@@ -528,6 +528,23 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         return changed ? { ...acc, balance: newBal } : acc;
       })
     );
+
+    // Revert credit card balance if deleted transaction was credit card expense
+    if (target.creditCardId && target.type === "expense") {
+      let updatedCardBal = 0;
+      setCreditCards((prev) =>
+        prev.map((c) => {
+          if (c.id === target.creditCardId) {
+            updatedCardBal = Math.max(0, Number(c.currentBalance) - Number(target.amount));
+            return { ...c, currentBalance: updatedCardBal };
+          }
+          return c;
+        })
+      );
+      if (user && supabase && isValidUUID(target.creditCardId)) {
+        syncCreditCardToDb(target.creditCardId, updatedCardBal, false);
+      }
+    }
 
     if (user && supabase && isValidUUID(id)) {
       supabase.from("transactions").delete().eq("id", id).eq("user_id", user.id).then(({ error }) => {

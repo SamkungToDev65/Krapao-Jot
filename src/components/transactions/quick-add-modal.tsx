@@ -129,7 +129,7 @@ export function QuickAddModal({ isOpen, onClose }: QuickAddModalProps) {
     addTransaction({
       type,
       amount: num,
-      accountId: isCard ? (accounts[0]?.id ?? "") : (selectedAccountId || (accounts[0]?.id ?? "")),
+      accountId: isCard ? "" : (selectedAccountId || (accounts[0]?.id ?? "")),
       creditCardId: isCard ? selectedCardId : undefined,
       categoryId: category?.id ?? "cat-1",
       categoryName: category?.name ?? "ทั่วไป",
